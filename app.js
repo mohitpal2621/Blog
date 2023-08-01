@@ -1,6 +1,6 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const _ = require("lodash");
+const mongoose = require("mongoose");
 const ejs = require("ejs");
 
 const homeStartingContent = "Lacus vel facilisis volutpat est velit egestas dui id ornare. Semper auctor neque vitae tempus quam. Sit amet cursus sit amet dictum sit amet justo. Viverra tellus in hac habitasse. Imperdiet proin fermentum leo vel orci porta. Donec ultrices tincidunt arcu non sodales neque sodales ut. Mattis molestie a iaculis at erat pellentesque adipiscing. Magnis dis parturient montes nascetur ridiculus mus mauris vitae ultricies. Adipiscing elit ut aliquam purus sit amet luctus venenatis lectus. Ultrices vitae auctor eu augue ut lectus arcu bibendum at. Odio euismod lacinia at quis risus sed vulputate odio ut. Cursus mattis molestie a iaculis at erat pellentesque adipiscing.";
@@ -9,7 +9,7 @@ const contactContent = "Scelerisque eleifend donec pretium vulputate sapien. Rho
 
 const app = express();
 
-let posts = [];
+// let posts = [];
 
 app.set('view engine', 'ejs');
 
@@ -17,66 +17,92 @@ app.use(bodyParser.urlencoded({extended: true}));
 
 app.use(express.static("public"));
 
-app.get("/", function(request, response){
+main().catch(err => console.log(err));
+
+async function main(){
+  await mongoose.connect('mongodb://127.0.0.1:27017/blogDB');
+
+  const postSchema = new mongoose.Schema({
+    title: String,
+    content: String
+  });
+
+  const Post = mongoose.model('Post', postSchema);
+
+  app.get("/", async function(request, response){
+    const posts = await Post.find({});
+
     response.render("home", {
-      Content: homeStartingContent,
-      postList: posts
-    }
-  );
-});
-
-app.get("/about", function(request, response){
-  response.render("about", {
-    about: aboutContent
+        Content: homeStartingContent,
+        postList: posts
+      }
+    );
   });
-});
 
-app.get("/contact", function(request, response){
-  response.render("contact", {
-    contact: contactContent
+  app.get("/compose", function(request, response){
+    response.render("compose");
   });
-});
 
-app.get("/compose", function(request, response){
-  response.render("compose");
-});
-
-app.post("/compose", function(req, res){
-  const post = {
-    title: req.body.postTitle,
-    content: req.body.postBody
-  };
-
-  const exisPost = posts.find(p => p.title.toLowerCase() === post.title.toLowerCase());
-
-  if(exisPost){
-    res.render("compose", {
-      error: "A post with the same title already exists. Please enter a different title."
-    });
-  }
-  else{
-    posts.push(post);
-    res.redirect("/"); 
-  }
-});
-
-app.get("/post/:key", function(req, res) {
-  const rqstTitle = _.lowerCase(req.params.key);
-  posts.forEach(function(post){
+  app.post("/compose", async function(req, res){
     
-    const storedTitle = _.lowerCase(post.title);
+    // const exisPost = posts.find(p => p.title.toLowerCase() === post.title.toLowerCase());
+    const exisPost = await Post.findOne({title: req.body.postTitle});
     
-    if (rqstTitle === storedTitle) {
-      res.render("post", {
-        titlePost: post.title,
-        contentPost: post.content
+    if(exisPost){
+      res.render("compose", {
+        error: "A post with the same title already exists. Please enter a different title."
       });
+    } else{
+      const post = new Post({
+        title: req.body.postTitle,
+        content: req.body.postBody
+      });
+  
+      await post.save().then(() => {
+        res.redirect('/');
+      }).catch(err => {
+        res.status(400).send("Unable to save post to database.");
+      });
+
     }
+  });
+
+  app.get("/post/:postId", async function(req, res) {
+    const rqstId = req.params.postId;
+
+    const postFound = await Post.findById(rqstId);
+
+    res.render("post", {
+      titlePost: postFound.title,
+      contentPost: postFound.content,
+      id: postFound._id 
+    });
     
   });
-});
 
+  app.post("/delete", async function(req,res){
 
-app.listen(3000, function() {
-  console.log("Server started on port 3000");
-});
+    const idDelete= req.body.button;
+    
+    await Post.findByIdAndRemove(idDelete);
+    
+    res.redirect("/");
+  });
+
+  app.get("/about", function(request, response){
+    response.render("about", {
+      about: aboutContent
+    });
+  });
+
+  app.get("/contact", function(request, response){
+    response.render("contact", {
+      contact: contactContent
+    });
+  });
+
+  app.listen(3000, function() {
+    console.log("Server started on port 3000");
+  });
+
+}

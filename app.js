@@ -9,7 +9,6 @@ const contactContent = "Scelerisque eleifend donec pretium vulputate sapien. Rho
 
 const app = express();
 
-// let posts = [];
 
 app.set('view engine', 'ejs');
 
